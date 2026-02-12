@@ -13,12 +13,12 @@ A step-by-step natural language pipeline for building software with AI.
 ```
   ▲ Least words, most compressed
   │
-  │  01 — IDEA          → One sentence. What are you building?
-  │  02 — SPEC          → Real-world requirements. What must it do?
-  │  03 — ARCHITECTURE  → Code outline. How is it structured?
-  │  04 — IMPLEMENTATION→ File-by-file build instructions
-  │  05 — VALIDATION    → How do you know it works?
-  │  06 — FEEDBACK      → What changed? Propagate upward.
+  │  01 — IDEA           → One sentence. What are you building?
+  │  02 — SPEC           → Real-world requirements. What must it do?
+  │  03 — ARCHITECTURE   → Code outline. How is it structured?
+  │  04 — IMPLEMENTATION → File-by-file build instructions
+  │  05 — VALIDATION     → How do you know it works?
+  │  06 — FEEDBACK       → What changed? Propagate upward.
   │
   ▼ Most words, most specific
 ```
@@ -27,7 +27,7 @@ A step-by-step natural language pipeline for building software with AI.
 
 ```
 You: "Create a game where you change lightbulbs"
-AI:  [generates README from 01-idea.md]
+AI:  [generates README from 01-Idea.md]
 
 You: "Begin on 02-spec.md"
 AI:  [expands idea into requirements]
@@ -42,12 +42,21 @@ AI:  [designs code structure from spec]
 
 | Step | File | Input | Output |
 |------|------|-------|--------|
-| 1 | [01-idea.md](01-idea.md) | Your one sentence | Project README |
+| 1 | [01-Idea.md](01-Idea.md) | Your one sentence | Project README |
 | 2 | [02-spec.md](02-spec.md) | README | Requirements document |
 | 3 | [03-architecture.md](03-architecture.md) | Requirements | Code outline / file map |
 | 4 | [04-implementation.md](04-implementation.md) | Code outline | Built files |
 | 5 | [05-validation.md](05-validation.md) | Built files | Test results / fixes |
 | 6 | [06-feedback.md](06-feedback.md) | Issues found | Updates to upstream steps |
+
+## Evaluation Frameworks
+
+Use these after building to assess quality and alignment:
+
+| Framework | File | Purpose |
+|-----------|------|---------|
+| Project Analyzer | [Concept-Execution-Evaluation.md](Concept-Execution-Evaluation.md) | Quick concept/execution/scope assessment with actionable verdicts |
+| Quality Evaluation | [Quality-Evaluation.md](Quality-Evaluation.md) | Comprehensive purpose-fidelity and production-readiness audit |
 
 ## Philosophy
 
