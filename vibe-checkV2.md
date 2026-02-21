@@ -1,334 +1,475 @@
-# Vibe-Code Detection Audit v1.0
+# Vibe-Code Detection Audit v2.0
 
-## Identifying Software That Looks Right But Doesn't Work Right
+You are performing a remediation-focused vibe-code audit on this repository. The goal is NOT to shame AI-assisted development — it's to find where AI-generated code lacks meaningful human review so the developer can shore it up.
 
-> The most dangerous code isn't broken code. It's code that passes every surface-level inspection while silently doing nothing. LLMs generate what code *looks like*, not what code *does*.
+## Framework
 
----
+Score across three weighted domains:
+- **A. Surface Provenance (20%)** — How was the code created?
+- **B. Behavioral Integrity (50%)** — Does the code actually work?
+- **C. Interface Authenticity (30%)** — Is the interface genuine?
 
-## PURPOSE
+Each domain has 7 sub-criteria scored 1-3 (Weak/Moderate/Strong). Higher = more authentic.
 
-Detect whether a codebase was AI-generated without meaningful human review, testing, or adversarial thinking. This audit goes beyond checking for AI-style comments or commit patterns — it examines whether the code **actually functions** or merely **appears to function**, and whether the interface was **designed for humans** or **designed by a model that has never used a mouse**.
-
-This prompt produces a **Vibe-Code Confidence Score** (0-100) based on weighted findings across three domains: code provenance signals, behavioral integrity, and interface authenticity.
-
----
-
-## AUDIT DOMAINS
-
+**Final calculation:**
 ```
-┌─────────────────────────────────────────────┐
-│  DOMAIN A: SURFACE PROVENANCE               │
-│  Does this look like it was vibe-coded?      │
-├─────────────────────────────────────────────┤
-│  DOMAIN B: BEHAVIORAL INTEGRITY             │
-│  Does the code actually do what it           │
-│  appears to do?                              │
-├─────────────────────────────────────────────┤
-│  DOMAIN C: INTERFACE AUTHENTICITY            │
-│  Was this interface designed by someone       │
-│  who has used software with their hands?     │
-└─────────────────────────────────────────────┘
+Weighted Authenticity = (A% × 0.20) + (B% × 0.50) + (C% × 0.30)
+Vibe-Code Confidence = 100% - Weighted Authenticity
 ```
 
----
-
-## DOMAIN A: SURFACE PROVENANCE
-
-These are the fast indicators — detectable without running the code or deeply tracing execution paths.
-
-### A.1 File & Project Structure
-
-- [ ] **Test absence**: No test files, no test runner config, no CI test steps, no test directory
-- [ ] **Security file absence**: No `.env.example`, no SECURITY.md, no auth middleware file
-- [ ] **Monolithic generation**: Large files that cover many concerns, generated in a single pass rather than composed incrementally
-- [ ] **Uniform formatting**: Every file uses identical patterns, spacing, and structure — no variation that comes from different humans touching different parts over time
-- [ ] **Polished README, hollow interior**: Marketing-quality README with badges, feature lists, and architecture diagrams — but the actual code is thin, untested, or incomplete
-
-### A.2 Commit & History Patterns
-
-- [ ] **Single-pass commits**: One or two massive commits containing the entire project, no iterative refinement
-- [ ] **No security commits**: Zero commit messages referencing security fixes, vulnerability patches, or access control changes
-- [ ] **No refactoring history**: No evidence of code being restructured, renamed, or reorganized — it was generated "right" the first time
-- [ ] **Prompt artifacts in commits**: Commit messages that read like prompts or responses ("Add user authentication system with JWT tokens and refresh flow")
-- [ ] **Timestamp clustering**: All commits within a short window, suggesting generation rather than development
-
-### A.3 Comment & Naming Patterns
-
-- [ ] **Tutorial-style comments**: Comments that explain what code does to a reader rather than why decisions were made ("This function validates the user input" vs "Validate before DB write to prevent injection — see incident #47")
-- [ ] **Uniform naming intelligence**: Every variable and function named with the same level of descriptiveness and style — real codebases have naming inconsistencies because different parts were written on different days by different moods
-- [ ] **No frustration artifacts**: No commented-out attempts, no "HACK:", no "FIXME: this is awful but it works" — real code carries scars
-- [ ] **Explanatory constants**: `const MAX_RETRIES = 3; // Maximum number of retries` — the comment adds zero information, but an LLM generates it reflexively
-
-### A.4 Dependency Signals
-
-- [ ] **Kitchen-sink imports**: Libraries imported that are never used, or used once for something trivially implementable
-- [ ] **Redundant dependencies**: Multiple libraries that do the same thing (two validation libraries, two HTTP clients, two date libraries)
-- [ ] **Version indifference**: All dependencies on `latest` or `^` with no evidence that specific versions were chosen for compatibility
-- [ ] **Prestigious but unnecessary**: Well-known libraries included for credibility (lodash imported for a single `_.get()` call)
+**Classification scale:**
+| Range | Classification |
+|-------|---------------|
+| 0-15 | Human-Authored |
+| 16-35 | AI-Assisted |
+| 36-60 | Substantially Vibe-Coded |
+| 61-85 | Predominantly Vibe-Coded |
+| 86-100 | Almost Certainly AI-Generated |
 
 ---
 
-## DOMAIN B: BEHAVIORAL INTEGRITY
+## Instructions
 
-This is where vibe-code detection gets serious. These checks require tracing execution paths, not just reading code.
+Work through each sub-criterion below. For each one:
+1. Run the indicated shell commands and code inspections
+2. Document concrete evidence with file paths and line numbers
+3. Score 1 (Weak), 2 (Moderate), or 3 (Strong)
+4. Write a remediation note for anything scoring below 3
 
-### B.1 Disconnected Call Chains
-
-**The core vibe-code failure: components that exist independently but aren't wired together.**
-
-- [ ] **Dead middleware**: Auth middleware defined but never mounted on the router. Rate limiters imported but never applied. CORS configured but not used. For every security/infrastructure middleware, verify it appears in the actual request pipeline — not just in an import statement.
-- [ ] **Orphan functions**: Functions defined, exported, but never called by anything. Utility files that nothing imports. Validation helpers that no route handler references.
-- [ ] **Phantom feature flags**: Configuration for features that don't exist. Environment variables read but never checked. Feature toggle infrastructure with no toggles.
-- [ ] **Registration without activation**: Event listeners defined but never registered. Cron jobs configured but never scheduled. WebSocket handlers that nothing connects to.
-
-**How to check:** For every import and every function definition, trace forward: does anything actually call this? For every route handler, trace backward: what middleware actually executes before it?
-
-### B.2 Error Handling Theater
-
-**Vibe-coded error handling performs the ritual of catching without the substance of handling.**
-
-- [ ] **Swallowed errors**: `catch (err) { console.log(err) }` — the error is logged (maybe) and execution continues as if nothing happened. No retry, no fallback, no user notification, no state cleanup.
-- [ ] **No-op rethrows**: `catch (err) { throw err }` — functionally identical to no try/catch at all, but looks like error handling.
-- [ ] **Uniform catch blocks**: Every try/catch in the codebase handles errors identically. Real error handling is context-specific — a database error requires different recovery than a network timeout than a validation failure.
-- [ ] **Missing finally blocks**: Resources opened in try blocks (file handles, database connections, streams) with no finally/cleanup path.
-- [ ] **Optimistic-only paths**: No error handling at all on operations that can fail — database writes, network requests, file operations, JSON parsing. The code assumes success.
-- [ ] **Status code theater**: API endpoints that return 200 OK regardless of what happened. Or endpoints that always return `{ success: true }` with no error branch.
-
-### B.3 Unchecked Return Values
-
-**LLMs generate both the function and the caller independently. The function returns meaningful data. The caller ignores it.**
-
-- [ ] **Ignored validation**: `validateInput(data)` is called but the return value (true/false/error object) is never checked. Execution continues regardless of validity.
-- [ ] **Ignored save results**: `await db.save(record)` is called but the result isn't checked for success or failure. The response tells the user it worked no matter what.
-- [ ] **Ignored authentication checks**: `isAuthenticated(req)` returns a boolean, but the route handler doesn't branch on it.
-- [ ] **Fire-and-forget writes**: Database writes, API calls, or file writes that aren't awaited and whose success is never confirmed.
-
-### B.4 Async/Await Integrity
-
-**LLMs frequently generate async code that is syntactically valid but logically broken under real concurrency.**
-
-- [ ] **Missing awaits on critical operations**: `db.save(record)` without `await` — the operation starts but the function returns before it completes. Works in testing where timing is favorable. Fails in production under load.
-- [ ] **Sequential operations that should be parallel**: Awaiting independent operations one by one instead of `Promise.all()` — not a bug but a performance signature of code generated line-by-line.
-- [ ] **Parallel operations that should be sequential**: Independent-looking operations that actually depend on each other's results, fired simultaneously with `Promise.all()` — fails intermittently based on race conditions.
-- [ ] **Mixed paradigms**: `.then()` chains and `async/await` in the same function. Callbacks nested inside async functions. An LLM trained on diverse code samples generates hybrid patterns that a human would normalize.
-- [ ] **Unhandled promise rejections**: Async operations without `.catch()` or try/catch. The operation fails silently and the application continues with undefined state.
-
-### B.5 Configuration Theater
-
-**Config is loaded but never actually used where it matters.**
-
-- [ ] **Environment variables with permanent fallbacks**: `process.env.DATABASE_URL || 'postgresql://localhost:5432/mydb'` — every configurable value has a development default that works. The system appears configurable but runs on hardcoded values in practice.
-- [ ] **Config files that nothing reads**: `.env` or `config.json` exists and is documented, but the actual code has connection strings, API URLs, and constants hardcoded inline.
-- [ ] **Partial config propagation**: The config is loaded correctly at the top level but never passed to modules that need it. Submodules import their own hardcoded values.
-- [ ] **Security config that doesn't apply**: CORS origins configured in a config file, but the actual CORS middleware uses `'*'`. JWT secret defined in env, but the token verification uses a hardcoded string.
-
-### B.6 Incomplete CRUD
-
-**LLMs lose coherence across long generations. First operations get full attention. Later operations get scaffolding.**
-
-- [ ] **Create and Read work. Update and Delete don't.**: The POST and GET endpoints are fully implemented. PUT returns 200 without writing. DELETE either doesn't exist or returns success without doing anything.
-- [ ] **Pagination is a stub**: List endpoints return all records with no actual pagination, but the API accepts `page` and `limit` parameters that are ignored.
-- [ ] **Search doesn't filter**: Search endpoints accept query parameters but return all records regardless. The query is parsed, the database call ignores it.
-- [ ] **Sorting is cosmetic**: Sort parameters are accepted, passed through, but the database query doesn't use them, or sorts by a default field regardless.
-
-### B.7 Frontend/Backend Disconnect
-
-**Generated in separate conversations. Each piece looks right in isolation. Never tested together.**
-
-- [ ] **Client-side validation only**: The React form validates beautifully. The Express endpoint behind it accepts anything. The validation logic isn't shared or even consistent between frontend and backend.
-- [ ] **API contract mismatch**: The frontend expects `{ data: { user: {...} } }`. The backend returns `{ user: {...} }`. Works in development with mocked data. Breaks in production.
-- [ ] **Auth state fiction**: The frontend checks `localStorage` for an auth token and shows/hides UI accordingly. The backend doesn't validate the token on protected routes — or validates a different token format than the frontend sends.
-- [ ] **Mock data residue**: Components that render placeholder data, hardcoded arrays, or Lorem Ipsum where real API calls should be. The fetch function exists but returns mock data that was never replaced.
-
-### B.8 The Happy Path Ceiling
-
-**The single most reliable vibe-code test: try the unhappy paths.**
-
-- [ ] **What happens with malformed input?** Not wrong types — subtly wrong formats. A date in US format when the system expects ISO. A phone number with country code when the system expects bare digits. A string at the max length boundary.
-- [ ] **What happens when the database is down?** Not slow — completely unreachable. Does the application crash, hang, or degrade gracefully?
-- [ ] **What happens with expired vs. missing vs. invalid auth?** These are three different failure modes. Vibe-coded auth treats them identically or handles only one.
-- [ ] **What happens with concurrent modifications?** Two users editing the same record. Two requests hitting the same endpoint simultaneously. Last write wins? Error? Corruption?
-- [ ] **What happens when external APIs fail?** Not 500 — timeout. Or 429. Or a response body that doesn't match the expected schema. The LLM generates the success case from training data. It rarely generates graceful degradation because graceful degradation is bespoke.
+Be honest in both directions — acknowledge genuine engineering depth where it exists, and flag decorative/incomplete code without sugarcoating.
 
 ---
 
-## DOMAIN C: INTERFACE AUTHENTICITY
+## Domain A: Surface Provenance (20%)
 
-**An LLM has never used a mouse. It has never felt the frustration of a button that's 2 pixels too small, a modal that doesn't close when you click outside it, or a form that clears itself when you hit the back button. It generates interfaces from screenshots and descriptions — not from the embodied experience of using software with hands and eyes.**
+### A1. Commit History Patterns
 
-A human-designed interface carries evidence of use. An LLM-designed interface carries evidence of description.
+Run these commands and analyze the results:
 
-### C.1 Interaction Design Failures
+```bash
+# Total commits and author breakdown
+git log --all --no-merges --format='%an' | sort | uniq -c | sort -rn
 
-These are things a human designer would catch in five minutes of using their own product:
+# AI-attributed commit percentage
+git log --all --no-merges --format='%an' | grep -iE '(claude|copilot|cursor|aider|devin|gpt|sweep|cody|bot|dependabot|renovate)' | wc -l
+git log --all --no-merges --oneline | wc -l
 
-- [ ] **Click targets too small or imprecise**: Buttons, links, and interactive elements under 44x44px (mobile) or with padding that makes the visual target much larger than the clickable area. An LLM can't feel the frustration of trying to tap a 20px link on a phone.
-- [ ] **No hover/focus/active states**: Buttons that don't change on hover. Links with no visual feedback. Interactive elements that give zero indication they received input. An LLM generates the resting state because that's what screenshots show.
-- [ ] **Forms that fight the user**: Tab order that jumps randomly. Input fields that don't accept paste. Phone number fields that reject formatting characters. Email fields that don't allow `+` aliases. Date pickers that default to 1970 instead of today. An LLM generates the input element — not the input *experience*.
-- [ ] **Modal/dialog dysfunction**: Modals that don't close on ESC or outside click. Modals that scroll the background when you scroll inside them. Nested modals. Modals that lose your form data when dismissed.
-- [ ] **Missing loading and transition states**: Buttons that don't disable after click (allowing double-submit). No loading indicators during async operations. Content that pops in with layout shift. State transitions with no animation or feedback — the UI just teleports between states.
-- [ ] **Scroll behavior**: Horizontal scroll where there shouldn't be any. Infinite scroll that doesn't preserve position when you navigate back. Scroll containers inside scroll containers. Fixed headers that cover content on mobile.
-- [ ] **Copy/paste hostility**: Text that can't be selected. Fields that block paste (especially passwords). Content that copies with invisible formatting artifacts.
+# Formulaic commit message patterns (Add X, Implement Y, feat: Z, fix: W)
+git log --all --no-merges --format='%s' | grep -cE '^(Add|Implement|Create|Update|Fix|Remove|Refactor|Improve) \w+|^(feat|fix|chore|docs|refactor|test)\(.+\):|^(feat|fix|chore|docs|refactor|test):'
 
-### C.2 Layout & Spacing Uncanny Valley
+# Human frustration/iteration markers
+git log --all --no-merges --format='%s' | grep -ciE '(wip|broken|oops|typo|hotfix|workaround|hack|revert|ugh|temp|nit|cleanup|forgot|whoops|debug|wtf|scratch that|try again|finally|works now|fingers crossed)'
 
-LLM-generated layouts have a specific aesthetic signature — everything looks "designed" but nothing feels *comfortable*:
+# Reverts (course correction signals)
+git log --all --no-merges --format='%s' | grep -ci '^revert'
 
-- [ ] **Grid rigidity**: Every element perfectly aligned to an obvious grid with zero organic variation. Real interfaces have intentional asymmetry, visual hierarchy, and breathing room that comes from iterating with real content.
-- [ ] **Uniform spacing**: Every margin and padding is the same value (often 16px or 1rem everywhere). Real designs use varied spacing to create visual hierarchy — tight grouping for related elements, generous spacing for separation.
-- [ ] **Placeholder content fit**: The layout works perfectly with placeholder text but breaks with real content. Names that are longer than "John Doe". Descriptions that exceed three lines. Titles in non-English languages that are much longer. LLMs design for the demo, not the data.
-- [ ] **Component soup**: Pages assembled from generic UI kit components with no unifying visual identity. A card here, a table there, a hero section on top — each component technically correct, collectively lacking personality or intentional design language.
-- [ ] **Shadow and radius overuse**: Drop shadows on everything. Rounded corners on everything. Gradients that serve no informational purpose. These are CSS properties the LLM applies liberally because they appear in modern design system training data.
-- [ ] **Desktop-first with responsive afterthought**: The desktop layout is polished. The mobile layout is either broken, a crude shrinkwrap of the desktop layout, or suspiciously a completely different design (generated separately). Real responsive design adapts — it doesn't just stack.
-
-### C.3 Information Architecture Failures
-
-**These reveal that the interface was described rather than designed through use:**
-
-- [ ] **Navigation that matches the database, not the user**: Menu items that mirror database table names or API endpoint names rather than user mental models. "Users", "Transactions", "Sessions" instead of "People", "Payments", "Activity".
-- [ ] **Settings pages with no hierarchy**: Every setting dumped into one page or one modal with no grouping, no prioritization, no progressive disclosure. An LLM generates all the settings it can think of. A human surfaces the three that matter and hides the rest.
-- [ ] **Feature parity as design**: Every entity in the system has identical CRUD views — same table layout, same form layout, same detail page layout. The user model has the same interface as the log model. A human designer recognizes that different data types need different presentations.
-- [ ] **No empty states**: What does the dashboard show when there's no data? If it shows an empty table with headers and no rows, or renders nothing, or crashes — it wasn't designed by someone who considered the first-run experience.
-- [ ] **No keyboard navigation**: Tab doesn't move through interactive elements in logical order. Enter doesn't submit forms. Escape doesn't close modals. Arrow keys don't work in dropdowns. These aren't accessibility bonuses — they're basic expectations that a human designer includes because they *use* keyboards.
-- [ ] **Help and error messages written for developers**: "Error: SQLITE_CONSTRAINT_UNIQUE" instead of "That email is already registered." "404 Not Found" instead of "We couldn't find that page." LLMs generate the error the system produces, not the message the user needs.
-
-### C.4 Visual Coherence
-
-- [ ] **Multiple design systems**: Part of the UI uses Material Design components. Another part uses Tailwind defaults. A third section has custom-styled elements. This happens when different parts of the interface were generated in separate prompts with different context.
-- [ ] **Color incoherence**: More than 5-6 distinct colors with no obvious system. Or a palette that looks like it came from a CSS framework default theme with no customization. Or accessible color combinations by coincidence rather than intention.
-- [ ] **Typography chaos**: More than 2-3 font families. Inconsistent heading hierarchy (H2 smaller than H3 somewhere). Body text that's too small (under 16px) or line height that's too tight for comfortable reading. An LLM picks font properties that look reasonable in code but haven't been read on a screen.
-- [ ] **Icon inconsistency**: Icons from multiple icon sets with different stroke weights, fill styles, and visual language. Or icons used decoratively rather than communicatively — every list item has an icon but the icons don't help you scan the content.
-
-### C.5 The Five-Minute Use Test
-
-**The single most reliable interface authenticity check: use the interface for five minutes with real intent.**
-
-Not clicking through features. Not checking that pages load. Actually try to accomplish a task:
-
-- [ ] **Can you complete the primary task without confusion?** If the app is a todo list, can you create, edit, and complete a task without hitting a dead end?
-- [ ] **Does the interface respond to mistakes gracefully?** Type something wrong. Navigate away mid-form. Hit the back button. Refresh the page. Does the system help you recover or does it punish you?
-- [ ] **Does anything feel surprising?** Buttons that don't do what you expect. Navigation that takes you somewhere unexpected. State that changes without your input. Surprise is the signature of an interface designed from description rather than from use.
-- [ ] **Do you feel frustrated?** Not confused — frustrated. That feeling of "I can see what I want to do but the interface won't let me do it easily." This is the fundamental thing an LLM cannot optimize against because it has never felt it.
-- [ ] **Could you explain the navigation model to someone?** If you can't describe where things are and how to get to them after five minutes of use, the information architecture was generated, not designed.
-
----
-
-## SCORING
-
-### Domain Weights
-
-| Domain | Weight | Rationale |
-|--------|--------|-----------|
-| A — Surface Provenance | 20% | Fast indicators, lower confidence individually |
-| B — Behavioral Integrity | 50% | Highest signal — code that doesn't actually work is the core vibe-code failure |
-| C — Interface Authenticity | 30% | If a GUI exists, its design reveals authorship clearly |
-
-If the project has no GUI (library, CLI tool, backend service), redistribute Domain C's weight to Domain B (making it 80% B, 20% A).
-
-### Scoring Per Finding
-
-Each checked finding adds to the vibe-code confidence score proportional to its domain weight and individual severity:
-
-| Indicator Strength | Points | Example |
-|-------------------|--------|---------|
-| **Strong** | 3 | Auth middleware defined but never mounted |
-| **Moderate** | 2 | Uniform error handling across all catch blocks |
-| **Weak** | 1 | No frustration artifacts in comments |
-
-### Confidence Thresholds
-
-| Score Range | Assessment | Implication |
-|-------------|-----------|-------------|
-| **0-15** | **Human-authored** | Normal development patterns. Proceed with standard review. |
-| **16-35** | **AI-assisted** | Likely used AI for portions but a human was in the loop. Review AI-generated sections more carefully. |
-| **36-60** | **Substantially vibe-coded** | Significant portions generated without review. Trace all critical paths manually. Do not trust security features without verification. |
-| **61-85** | **Predominantly vibe-coded** | Little evidence of human review or testing. Treat the entire codebase as unreviewed. Full security audit required before any production use. |
-| **86-100** | **Entirely vibe-coded** | No meaningful human involvement beyond prompting. The software is a prototype wearing production clothes. Do not expose to real users, real credentials, or real data without a complete rewrite of critical paths. |
-
----
-
-## REPORT FORMAT
-
-```
-VIBE-CODE DETECTION REPORT
-==========================
-
-Project:                [name]
-Audit Date:             [date]
-Auditor:                [Claude model identifier]
-
-VIBE-CODE CONFIDENCE:   [0-100]
-ASSESSMENT:             [Human-authored | AI-assisted | Substantially vibe-coded | 
-                         Predominantly vibe-coded | Entirely vibe-coded]
-
-DOMAIN SCORES:
-  A — Surface Provenance:     [score] / [max possible]
-  B — Behavioral Integrity:   [score] / [max possible]
-  C — Interface Authenticity:  [score] / [max possible]
-
-TOP FINDINGS:
-  1. [Strongest indicator with location and evidence]
-  2. [Second strongest]
-  3. [Third strongest]
-  ...
-
-POSITIVE SIGNALS:
-  Evidence of human involvement found:
-  1. [Signal]
-  2. [Signal]
-  ...
-
-CRITICAL DISCONNECTIONS:
-  Code that exists but doesn't function:
-  1. [Component] — defined at [location], never called/mounted/used
-  2. [Feature] — accepts input at [location], ignores it at [location]
-  ...
-
-INTERFACE FINDINGS (if GUI exists):
-  Comfort failures:
-  1. [Finding] — [what a user would feel]
-  2. [Finding] — [what a user would feel]
-  ...
-
-RECOMMENDATION:
-  [One paragraph: what should happen next based on the score]
+# AI-tool branch naming patterns
+git branch -a --format='%(refname:short)' | grep -iE '(claude|copilot|cursor|aider|devin)/|^(ai|auto)[-/]'
 ```
 
+**Score guide:**
+- **1 (Weak):** >50% AI-authored, zero human markers, all formulaic messages
+- **2 (Moderate):** Mixed authorship OR some human markers present
+- **3 (Strong):** Clear human iteration visible in history
+
+### A2. Comment Archaeology
+
+```bash
+# Tutorial-style comments ("Step N:", "First, we...", "Here we define...")
+grep -rnE '#\s*(Step\s+[0-9]|First,?\s+(we|let)|Next,?\s+(we|let)|Now\s+(we|let)|Finally,?\s+(we|let)|Here\s+we\s+(define|create|implement|set up)|This\s+(function|method|class|module)\s+(is|will|does|handles)|We\s+(need|want|should|must)\s+to)' --include='*.py' --include='*.js' --include='*.ts' --include='*.go' --include='*.rs' | wc -l
+
+# Section divider comments (# ====, # ----, etc.)
+grep -rnE '#\s*[=]{4,}|#\s*[-]{4,}' --include='*.py' --include='*.js' --include='*.ts' | wc -l
+
+# TODO/FIXME/XXX/HACK markers
+grep -rnEi '(TODO|FIXME|XXX|HACK|WORKAROUND|KLUDGE)' --include='*.py' --include='*.js' --include='*.ts' --include='*.go' --include='*.rs' | wc -l
+
+# WHY comments (because, since, reason, due to, workaround for)
+grep -rnEi '#.*\b(because|since|reason|due to|workaround for|NOTE:)' --include='*.py' --include='*.js' --include='*.ts' | wc -l
+
+# Count source files for ratio context
+find . -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.go' -o -name '*.rs' | grep -v node_modules | grep -v __pycache__ | grep -v .git | wc -l
+```
+
+**Score guide:**
+- **1 (Weak):** Many tutorial comments, zero TODOs/FIXMEs, comments describe WHAT never WHY
+- **2 (Moderate):** Some tutorial patterns but TODOs/FIXMEs exist
+- **3 (Strong):** Comments explain WHY, contain human iteration markers
+
+### A3. Test Quality Signals
+
+```bash
+# Count test functions
+grep -rnE '(def test_|it\(|describe\(|#\[test\]|func Test)' --include='*.py' --include='*.js' --include='*.ts' --include='*.go' --include='*.rs' | wc -l
+
+# Trivial assertions: assert X is not None
+grep -rnE 'assert\s+\w+\s+is\s+not\s+None|assert.*is not None|expect\(.*\)\.not\.toBeNull|expect\(.*\)\.toBeDefined' --include='*.py' --include='*.js' --include='*.ts' | wc -l
+
+# Error path testing: pytest.raises, assertRaises, expect(...).toThrow
+grep -rnE 'pytest\.raises|assertRaises|\.toThrow|\.rejects|should panic|#\[should_panic\]' --include='*.py' --include='*.js' --include='*.ts' --include='*.go' --include='*.rs' | wc -l
+
+# Formulaic test docstrings ("Tests for X.", "Test X.")
+grep -rnE '"""Tests?\s+for\s+\w+' --include='*.py' | wc -l
+
+# Parametrized/table-driven tests
+grep -rnE '@pytest\.mark\.parametrize|\.each\(|table[Dd]riven|test_cases\s*=' --include='*.py' --include='*.js' --include='*.ts' --include='*.go' | wc -l
+```
+
+Then sample 3-5 test files and assess: Do tests verify behavior and values, or just existence? Are edge cases covered? Do test names describe scenarios or just function names?
+
+**Score guide:**
+- **1 (Weak):** Overwhelmingly happy-path, many trivial assertions, zero error-path tests
+- **2 (Moderate):** Mix of quality — some deep tests alongside formulaic ones
+- **3 (Strong):** Tests verify behavior, cover errors, use parametrization
+
+### A4. Import & Dependency Hygiene
+
+```bash
+# List declared dependencies
+cat requirements*.txt pyproject.toml setup.py setup.cfg package.json Cargo.toml go.mod 2>/dev/null | head -100
+
+# Find all imports used in source
+grep -rhE '^(import|from)\s+\w+' --include='*.py' | sed 's/from \([a-zA-Z0-9_]*\).*/\1/' | sed 's/import \([a-zA-Z0-9_]*\).*/\1/' | sort -u
+
+# Wildcard imports
+grep -rnE '^from\s+\S+\s+import\s+\*' --include='*.py' | wc -l
+
+# Lazy imports (try/except import patterns — positive signal)
+grep -rnE 'try:\s*$' -A1 --include='*.py' | grep 'import' | wc -l
+```
+
+Cross-reference: Are all declared dependencies actually imported somewhere? Are any imports not declared? Note any "sounds correct but never used" phantom deps.
+
+**Score guide:**
+- **1 (Weak):** Multiple phantom deps, wildcard imports, unused declarations
+- **2 (Moderate):** Mostly clean, 1-2 phantom deps
+- **3 (Strong):** All deps used, granular imports, lazy fallbacks for optionals
+
+### A5. Naming Consistency
+
+```bash
+# Class names
+grep -rhE '^\s*class\s+(\w+)' --include='*.py' | sed 's/.*class //' | sed 's/[:(].*//'
+
+# Function/method names
+grep -rhE '^\s*def\s+(\w+)' --include='*.py' | sed 's/.*def //' | sed 's/[:(].*//' | head -50
+
+# Factory function patterns (create_X_Y)
+grep -rnE 'def create_\w+' --include='*.py' | wc -l
+
+# Logger initialization uniformity
+grep -rl 'logger\s*=\s*logging\.getLogger(__name__)' --include='*.py' | wc -l
+```
+
+Check: Is naming perfectly uniform across ALL files (suspicious), or does it show natural variation (abbreviations, legacy names, mixed conventions from different contributors)?
+
+**Score guide:**
+- **1 (Weak):** Zero deviations across 30+ names — too uniform for human development
+- **2 (Moderate):** Mostly consistent with minor natural variation
+- **3 (Strong):** Consistent conventions with organic variation
+
+### A6. Documentation vs Reality
+
+```bash
+# Count documentation files
+find . -maxdepth 2 -name '*.md' -o -name '*.rst' | grep -v node_modules | grep -v .git | wc -l
+
+# List them
+find . -maxdepth 2 -name '*.md' -o -name '*.rst' | grep -v node_modules | grep -v .git
+```
+
+Read the README and compare claimed features to actual implementation. Check: Are documented features implemented? Is documentation volume proportionate to codebase age/size? Are there fabricated claims?
+
+**Score guide:**
+- **1 (Weak):** Major features documented but not implemented, or massive doc volume for a young project
+- **2 (Moderate):** Docs mostly match reality, some volume disproportion
+- **3 (Strong):** Documentation accurately reflects implementation
+
+### A7. Dependency Utilization
+
+For each declared dependency, verify it's used meaningfully (not just imported once in a dead module). Check whether dependencies are deeply integrated vs superficially referenced.
+
+**Score guide:**
+- **1 (Weak):** Multiple deps imported once or used trivially
+- **2 (Moderate):** Most deps well-utilized, 1-2 superficial
+- **3 (Strong):** All deps deeply integrated into actual functionality
+
 ---
 
-## USAGE NOTES
+## Domain B: Behavioral Integrity (50%)
 
-**When to run this audit:**
+**This is the most important domain.** Run two independent analysis passes:
+1. **Problem-focused pass:** Catalogue every issue (dead code, mock data, exception swallowing, ghost config)
+2. **Execution-tracing pass:** Pick 3-5 critical features and trace their call chains end-to-end
 
-- Before depending on any open-source project you didn't build
-- Before deploying any AI-generated code to production
-- Before connecting any third-party tool to real credentials
-- When evaluating software from a vendor who ships unusually fast
-- When something looks too polished for its project age
+Reconcile both perspectives in your final score.
 
-**What this audit is NOT:**
+### B1. Error Handling Authenticity
 
-This is not a judgment on AI-assisted development. Using AI to write code is fine. The danger is using AI to write code *and then not reviewing what it wrote*. This audit detects the absence of review, not the presence of AI.
+```bash
+# Bare except / except Exception
+grep -rnE 'except\s*(Exception)?\s*:' --include='*.py' | wc -l
 
-**Combining with the Agentic Security Audit:**
+# except: pass (swallowed exceptions)
+grep -rnE 'except.*:\s*$' -A1 --include='*.py' | grep -E '^\s+pass\s*$' | wc -l
 
-This prompt is designed to work as a companion to the Agentic Security Audit v2.0. Run this first. If the vibe-code confidence score is above 35, run the security audit at STRICT or MAXIMUM strictness — the probability of real security failures is directly correlated with the absence of human review.
+# Custom exception classes
+grep -rnE 'class\s+\w*(Error|Exception)\s*\(' --include='*.py'
+
+# Exception chaining (raise X from e)
+grep -rnE 'raise\s+\w+.*\bfrom\b' --include='*.py' | wc -l
+
+# Typed exception handling (catching specific types)
+grep -rnE 'except\s+[A-Z]\w+Error|except\s+\([A-Z]' --include='*.py' | wc -l
+```
+
+Then read 3-5 error handlers in critical paths (auth, data handling, network). Do they differentiate between error types? Do they log with context? Do they recover or re-raise meaningfully?
+
+**Score guide:**
+- **1 (Weak):** 20+ bare except:pass, no custom exceptions, silent failures in critical paths
+- **2 (Moderate):** Mix of genuine typed handling alongside swallowed exceptions
+- **3 (Strong):** Domain-specific exceptions, differentiated recovery, fail-closed on critical paths
+
+### B2. Configuration Actually Used
+
+```bash
+# Env var definitions (in .env files, docker-compose, etc.)
+grep -rhE '^[A-Z][A-Z0-9_]+=|^[A-Z][A-Z0-9_]+:' .env* docker-compose* 2>/dev/null | sed 's/[=:].*//' | sort -u
+
+# Env var reads in source
+grep -rhE "os\.(environ|getenv)\s*[\[\(]['\"]([A-Z][A-Z0-9_]+)" --include='*.py' | grep -oE '[A-Z][A-Z0-9_]+' | sort -u
+
+# Config class fields
+grep -rnE '^\s+\w+\s*[:=]' --include='*.py' -l | xargs grep -l 'Config\|Settings'
+```
+
+Cross-reference: Which defined env vars are actually read? Which config class fields are consumed by other code? Any settings API that allows changes but has no backend effect?
+
+**Score guide:**
+- **1 (Weak):** >30% ghost config, settings API with no backend effect
+- **2 (Moderate):** ~80% config wired, some ghost vars
+- **3 (Strong):** All config consumed, clear env-to-behavior mapping
+
+### B3. Call Chain Completeness
+
+Pick the 3-5 most important features claimed by the project. For each one, trace the complete call chain from entry point to final effect. Document:
+- Does the chain complete, or does it dead-end in a stub/mock/pass?
+- Are there any functions called that don't exist?
+- Do return values get consumed by callers?
+
+```bash
+# Dead modules (files never imported by anything outside their own package)
+# For each top-level package directory, check external imports:
+for pkg in $(find . -mindepth 1 -maxdepth 1 -type d -not -name '.*' -not -name '__*' -not -name 'node_modules' -not -name 'tests'); do
+  name=$(basename $pkg)
+  external_imports=$(grep -rl "from ${name}\b\|import ${name}\b" --include='*.py' | grep -v "^\./${name}/" | wc -l)
+  echo "${name}: ${external_imports} external imports"
+done
+
+# Functions that return hardcoded dicts/lists (potential mock data)
+grep -rnE 'return\s*\{["\x27]' --include='*.py' | head -20
+
+# NotImplementedError stubs
+grep -rnE 'raise NotImplementedError' --include='*.py'
+
+# Pass-only functions
+grep -rnE '^\s+pass\s*$' -B5 --include='*.py' | grep -E 'def\s+\w+'
+```
+
+**Score guide:**
+- **1 (Weak):** Major features are stubs, dead modules, mock data returns
+- **2 (Moderate):** Core chains complete, peripheral features incomplete
+- **3 (Strong):** All claimed features trace to real implementations
+
+### B4. Async Correctness
+
+(Skip if project doesn't use async.)
+
+```bash
+# Async functions
+grep -rnE 'async\s+def' --include='*.py' | wc -l
+
+# Blocking calls inside async functions (potential issues)
+grep -rnE 'async\s+def' -A20 --include='*.py' | grep -E '(open\(|\.read\(\)|\.write\(\)|time\.sleep|subprocess\.run|requests\.)' | head -10
+
+# Proper async lock usage
+grep -rnE 'asyncio\.Lock|asyncio\.Semaphore|asyncio\.Event' --include='*.py' | wc -l
+
+# Global mutable state accessed from async handlers
+grep -rnE '^\w+\s*=\s*(\[\]|\{\}|set\(\)|None)' --include='*.py' | head -10
+```
+
+**Score guide:**
+- **1 (Weak):** Blocking I/O in async handlers, no locks on shared state, event loop misuse
+- **2 (Moderate):** Core async patterns correct, peripheral violations
+- **3 (Strong):** Proper async/sync separation, correct locking, no blocking in event loop
+
+### B5. State Management Coherence
+
+Check all shared mutable state (singletons, global dicts, caches, connection pools):
+- Is access thread-safe?
+- Are caches bounded (size limits, TTL)?
+- Is cleanup handled on shutdown?
+- Is there a clear ownership model (DI container, factory pattern, etc.)?
+
+```bash
+# Singletons and global state
+grep -rnE '^\w+\s*=\s*(None|\[\]|\{\}|set\(\))' --include='*.py' | grep -v test | grep -v __pycache__
+
+# Thread locks
+grep -rnE 'threading\.(Lock|RLock|Semaphore)|asyncio\.Lock' --include='*.py' | wc -l
+
+# Cache/size limits
+grep -rnE '(max_size|maxsize|cache_size|TTL|ttl|expires|evict)' --include='*.py' | wc -l
+```
+
+**Score guide:**
+- **1 (Weak):** Unprotected shared state, unbounded caches, no cleanup
+- **2 (Moderate):** Most state managed, some gaps
+- **3 (Strong):** Thread-safe everywhere, bounded caches, proper lifecycle management
+
+### B6. Security Implementation Depth
+
+```bash
+# Password hashing (look for real algorithms vs md5/sha1)
+grep -rnEi '(pbkdf2|bcrypt|scrypt|argon2|sha256|md5|sha1)' --include='*.py'
+
+# Hardcoded secrets
+grep -rnEi '(password|secret|api_key|token)\s*=\s*["\x27][^"\x27]{8,}' --include='*.py' | grep -v test | grep -v example
+
+# SQL injection vectors
+grep -rnE 'f".*SELECT|f".*INSERT|f".*UPDATE|f".*DELETE|\.format\(.*SELECT' --include='*.py'
+
+# SSRF protection
+grep -rnEi '(validate.*url|block.*internal|reserved.*ip|metadata.*url)' --include='*.py'
+
+# Rate limiting
+grep -rnEi '(rate.?limit|throttl|backoff|retry.?after)' --include='*.py' | wc -l
+
+# Input validation
+grep -rnE '(validate|sanitize|escape|parameterize)' --include='*.py' | wc -l
+```
+
+Assess depth: Is security decorative (imported but not used) or deep (actual crypto, rate limiting with backoff, input validation at boundaries)?
+
+**Score guide:**
+- **1 (Weak):** Decorative security, hardcoded secrets, SQL injection vectors
+- **2 (Moderate):** Real security on some paths, gaps on others
+- **3 (Strong):** Production-grade crypto, rate limiting, input validation, SSRF protection
+
+### B7. Resource Management
+
+```bash
+# Context managers (with statements)
+grep -rnE '^\s+with\s+' --include='*.py' | wc -l
+
+# File handles without context managers
+grep -rnE '=\s*open\(' --include='*.py' | grep -v 'with ' | wc -l
+
+# Cleanup/shutdown handlers
+grep -rnEi '(atexit|signal\.signal|finally:|__del__|shutdown|cleanup|close\(\)|dispose)' --include='*.py' | wc -l
+
+# Background task lifecycle
+grep -rnEi '(asyncio\.create_task|threading\.Thread|CancelledError|daemon)' --include='*.py' | head -10
+```
+
+**Score guide:**
+- **1 (Weak):** Leaked handles, no cleanup, unbounded growth
+- **2 (Moderate):** Most resources managed, some gaps
+- **3 (Strong):** Context managers, bounded queues, graceful shutdown
 
 ---
 
-## VERSION HISTORY
+## Domain C: Interface Authenticity (30%)
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0 | Feb 2026 | Initial release. Three-domain detection framework covering surface provenance, behavioral integrity, and interface authenticity. Developed from analysis of the Moltbook incident and broader patterns in vibe-coded production software. |
+### C1. API Design Consistency
+
+Check route definitions across all modules. Are HTTP methods, status codes, error responses, and model patterns consistent? Is there a shared model layer or do routes define ad-hoc dicts?
+
+### C2. UI Implementation Depth
+
+If there's a frontend: Is it a real SPA with components, state management, and routing? Or a single HTML page with inline scripts? Check for real-time features (WebSocket, SSE) vs polling.
+
+### C3. State Management (Frontend)
+
+Does the frontend have proper state management (stores, reducers, context) or ad-hoc global variables?
+
+### C4. Security Infrastructure
+
+Rate limiting, CORS, CSP headers, session management, auth middleware — are these real or decorative?
+
+### C5. WebSocket Implementation
+
+If applicable: bidirectional communication, connection lifecycle, heartbeat, backpressure handling, reconnection protocol.
+
+### C6. Error UX
+
+Do users see structured error messages or raw stack traces? Are error states handled in the UI?
+
+### C7. Logging & Observability
+
+Structured logging (JSON), request tracing/correlation IDs, metrics collection, health checks backed by real data.
 
 ---
 
-## LICENSE
+## Output Format
 
-CC0 1.0 Universal — Public Domain
+Produce a report following this structure:
 
----
+```
+# Vibe-Code Detection Audit v2.0
+**Project:** [name]
+**Date:** [date]
+**Auditor:** Claude (automated analysis)
 
-*"An LLM has never felt the frustration of a button that's 2 pixels too small. It generates interfaces from screenshots and descriptions — not from the embodied experience of using software with hands and eyes."*
+## Executive Summary
+[2-3 paragraph summary: overall confidence, classification, key finding]
+
+## Scoring Summary
+| Domain | Weight | Score | Percentage | Rating |
+|--------|--------|-------|------------|--------|
+| A. Surface Provenance | 20% | X/21 | X% | Rating |
+| B. Behavioral Integrity | 50% | X/21 | X% | Rating |
+| C. Interface Authenticity | 30% | X/21 | X% | Rating |
+
+Weighted Authenticity: X%
+Vibe-Code Confidence: X%
+Classification: [label]
+
+## Domain A: Surface Provenance
+[For each A1-A7: Evidence, Assessment, Score]
+
+## Domain B: Behavioral Integrity
+[For each B1-B7: Evidence (with file:line), Assessment, Score]
+
+## Domain C: Interface Authenticity
+[For each C1-C7: Evidence, Assessment, Score]
+
+## High Severity Findings
+[Table: Finding, Location, Impact, Remediation]
+
+## Medium Severity Findings
+[Table: Finding, Location, Impact, Remediation]
+
+## What's Genuine
+[Bulleted list of real engineering with evidence]
+
+## What's Vibe-Coded
+[Bulleted list of decorative/incomplete code with evidence]
+
+## Remediation Checklist
+- [ ] [Actionable item 1]
+- [ ] [Actionable item 2]
+...
+```
+
+## Critical Instructions
+
+1. **Be specific.** Every claim needs a file path and line number.
+2. **Trace call chains.** Don't just check if functions exist — verify they connect.
+3. **Check both directions.** Look for problems AND genuine depth. Many AI-assisted codebases have deeply engineered cores with decorative periphery.
+4. **Remediation over judgment.** Every negative finding must include a concrete fix.
+5. **Acknowledge good work.** If security implementation is genuinely deep, say so with evidence. If test coverage has real depth in specific modules, credit it.
+6. **The goal is to help.** This audit should give the developer a clear checklist for making their codebase production-ready, not a reason to feel bad about using AI tools.
+
+Save the completed report as `VIBE_CHECK_REPORT.md` in the project root.
